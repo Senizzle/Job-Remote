@@ -27,7 +27,7 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -r scripts/requirements.txt
+        run: pip install -r Scripts/requirements.txt
 
       - name: Restore seen jobs cache
         uses: actions/cache@v4
@@ -43,7 +43,7 @@ jobs:
           SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
         run: |
           mkdir -p data
-          python scripts/search.py
+          python Scripts/search.py
           COUNT=$(python -c "import json; print(json.load(open('data/new_jobs.json'))['new_count'])")
           echo "new_count=$COUNT" >> $GITHUB_OUTPUT
           echo "Found $COUNT new job(s)"
@@ -51,7 +51,7 @@ jobs:
       - name: Write job summary
         if: always()
         run: |
-          python scripts/summarize.py >> $GITHUB_STEP_SUMMARY
+          python Scripts/summarize.py >> $GITHUB_STEP_SUMMARY
 
       - name: Send email digest
         if: ${{ steps.search.outputs.new_count > 0 || inputs.force_email == true }}
@@ -60,7 +60,7 @@ jobs:
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
           FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
           FORCE_EMAIL: ${{ inputs.force_email }}
-        run: python scripts/send_email.py
+        run: python Scripts/send_email.py
 
       - name: Upload job results artifact
         if: always()
