@@ -45,4 +45,4 @@ jobs:
           mkdir -p data
           python3 Scripts/search.py
           python3 Scripts/set_output.py
-          COUNT
+          
