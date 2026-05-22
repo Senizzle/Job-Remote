@@ -44,4 +44,7 @@ jobs:
         run: |
           mkdir -p data
           python Scripts/search.py
+          COUNT=$(python3 -c "import json; print(json.load(open('data/new_jobs.json'))['new_count'])")
+          echo "new_count=$COUNT" >> $GITHUB_OUTPUT
+          echo "Found $COUNT new job(s)"
           COUNT
