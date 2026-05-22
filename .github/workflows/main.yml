@@ -2,13 +2,14 @@ name: Daily Remote Analyst Job Search
 
 on:
   schedule:
-    - cron: '0 13 * * 1-5'   # 8:00am ET, Monday–Friday
+    - cron: '0 13 * * 1-5'   # 8:00am ET (UTC-5), Monday–Friday
   workflow_dispatch:
     inputs:
       force_email:
-        description: 'Send email even if no new jobs found (for testing)'
+        description: 'Send email even if no new jobs found (useful for testing)'
+        required: false
+        default: 'false'
         type: boolean
-        default: false
 
 jobs:
   search-and-notify:
@@ -16,91 +17,68 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Python ────────────────────────────────────────────────────────────
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
         run: pip install -r scripts/requirements.txt
 
-      # ── 3. Restore seen-jobs cache ───────────────────────────────────────────
-      #   This persists the list of already-seen job IDs across daily runs
-      #   so we only alert you about truly NEW postings.
       - name: Restore seen jobs cache
         uses: actions/cache@v4
         with:
           path: data/seen_jobs.json
-          key: seen-jobs-${{ runner.os }}-${{ github.run_id }}
+          key: seen-jobs-${{ runner.os }}-${{ github.run_number }}
           restore-keys: |
             seen-jobs-${{ runner.os }}-
 
-      - name: Ensure data directory exists
-        run: mkdir -p data
-
-      # ── 4. Run job search ─────────────────────────────────────────────────────
       - name: Search for new jobs
         id: search
         env:
           SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
         run: |
+          mkdir -p data
           python scripts/search.py
-          echo "new_count=$(python -c "import json; d=json.load(open('data/new_jobs.json')); print(len(d))")" >> $GITHUB_OUTPUT
+          COUNT=$(python -c "import json; print(json.load(open('data/new_jobs.json'))['new_count'])")
+          echo "new_count=$COUNT" >> $GITHUB_OUTPUT
+          echo "Found $COUNT new job(s)"
 
-      # ── 5. Send email digest ──────────────────────────────────────────────────
+      - name: Write job summary
+        if: always()
+        run: |
+          python scripts/summarize.py >> $GITHUB_STEP_SUMMARY
+
       - name: Send email digest
-        if: steps.search.outputs.new_count > 0 || github.event.inputs.force_email == 'true'
+        if: ${{ steps.search.outputs.new_count > 0 || inputs.force_email == true }}
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          TO_EMAIL:       ${{ secrets.TO_EMAIL }}
-          FROM_EMAIL:     ${{ secrets.FROM_EMAIL }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          FORCE_EMAIL: ${{ inputs.force_email }}
         run: python scripts/send_email.py
 
-      # ── 6. Upload raw results as artifact ─────────────────────────────────────
       - name: Upload job results artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: job-results-${{ github.run_id }}
           path: data/new_jobs.json
+          if-no-files-found: ignore
           retention-days: 30
 
-      # ── 7. Print summary in the Actions UI ───────────────────────────────────
-      - name: Write job search summary
+      - name: Log outcome
         if: always()
         run: |
-          python - <<'EOF'
-          import json, os
-          from datetime import date
-
-          try:
-              with open("data/new_jobs.json") as f:
-                  jobs = json.load(f)
-          except Exception:
-              jobs = []
-
-          count = len(jobs)
-          today = date.today().strftime("%B %d, %Y")
-
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "w") as f:
-              f.write(f"# 🔍 Job Search Results — {today}\n\n")
-              f.write(f"**{count} new job(s) found today**\n\n")
-
-              if count == 0:
-                  f.write("_No new postings since last run. No email sent._\n")
-              else:
-                  f.write("| # | Title | Company | Source | Salary | Link |\n")
-                  f.write("|---|-------|---------|--------|--------|------|\n")
-                  for i, j in enumerate(jobs, 1):
-                      title   = j.get("title", "—")
-                      company = j.get("company", "—")
-                      source  = j.get("source_label", "—")
-                      salary  = j.get("salary", "—")
-                      url     = j.get("url", "#")
-                      f.write(f"| {i} | {title} | {company} | {source} | {salary} | [Apply]({url}) |\n")
-          EOF
+          COUNT="${{ steps.search.outputs.new_count }}"
+          if [ -z "$COUNT" ]; then
+            echo "⚠ Search step did not complete."
+          elif [ "$COUNT" -gt "0" ]; then
+            echo "✅ Found $COUNT new job(s) — email sent."
+          else
+            echo "💤 No new jobs found — skipping email."
+          fi
