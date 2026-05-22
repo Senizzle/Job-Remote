@@ -15,7 +15,6 @@ jobs:
   search-and-notify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,8 +33,7 @@ jobs:
         with:
           path: data/seen_jobs.json
           key: seen-jobs-${{ runner.os }}-${{ github.run_number }}
-          restore-keys: |
-            seen-jobs-${{ runner.os }}-
+          restore-keys: seen-jobs-${{ runner.os }}-
 
       - name: Search for new jobs
         id: search
@@ -45,4 +43,24 @@ jobs:
           mkdir -p data
           python3 Scripts/search.py
           python3 Scripts/set_output.py
-          
+
+      - name: Write job summary
+        if: always()
+        run: python3 Scripts/summarize.py >> $GITHUB_STEP_SUMMARY
+
+      - name: Send email digest
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          FORCE_EMAIL: ${{ inputs.force_email }}
+        run: python3 Scripts/send_email.py
+
+      - name: Upload job results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-results-${{ github.run_id }}
+          path: data/new_jobs.json
+          if-no-files-found: ignore
+          retention-days: 30
