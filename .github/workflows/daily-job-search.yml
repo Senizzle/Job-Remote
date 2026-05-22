@@ -43,8 +43,13 @@ jobs:
           SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
         run: |
           mkdir -p data
-          python Scripts/search.py
-          COUNT=$(python3 -c "import json; print(json.load(open('data/new_jobs.json'))['new_count'])")
-          echo "new_count=$COUNT" >> $GITHUB_OUTPUT
-          echo "Found $COUNT new job(s)"
+          python3 Scripts/search.py
+          python3 -c "
+          import json, os
+          data = json.load(open('data/new_jobs.json'))
+          count = data['new_count']
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'new_count={count}\n')
+          print(f'Found {count} new job(s)')
+          "
           COUNT
