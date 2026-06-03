@@ -89,11 +89,12 @@ def is_relevant(job: dict) -> bool:
 def search_serpapi(title: str, site: str) -> list[dict]:
     """Query Google Jobs via SerpAPI for a specific title + site."""
     params = {
-        "engine": "google_jobs",
-        "q": f'"{title}" remote site:{site}',
-        "chips": "date_posted:today,work_from_home:1",
-        "api_key": SERP_API_KEY,
-        "num": 10,
+    "engine": "google_jobs",
+    "q": f"{title} remote",
+    "location": "United States",
+    "chips": "employment_type:FULLTIME",
+    "api_key": SERP_API_KEY,
+    "num": 10,
     }
     try:
         resp = requests.get("https://serpapi.com/search", params=params, timeout=15)
