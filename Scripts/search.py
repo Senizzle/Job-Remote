@@ -92,7 +92,7 @@ def search_serpapi(title: str, site: str) -> list[dict]:
     "engine": "google_jobs",
     "q": f"{title} remote",
     "location": "United States",
-    "chips": "employment_type:FULLTIME",
+    "chips": "employment_type:FULLTIME,date_posted:3days",
     "api_key": SERP_API_KEY,
     "num": 10,
     }
